@@ -21,6 +21,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.firefox.firefox_binary import FirefoxBinary
+from selenium.common.exceptions import WebDriverException
 
 from arcgis.gis import GIS
 from arcgis.geocoding import geocode, reverse_geocode
@@ -85,6 +86,31 @@ def calc_offset(size, x, y):
     y_offset = y - math.ceil(y_center)
     return x_offset, y_offset
 
+def wheel_element(element, deltaY = 120, offsetX = 0, offsetY = 0):
+  error = element._parent.execute_script("""
+    var element = arguments[0];
+    var deltaY = arguments[1];
+    var box = element.getBoundingClientRect();
+    var clientX = box.left + (arguments[2] || box.width / 2);
+    var clientY = box.top + (arguments[3] || box.height / 2);
+    var target = element.ownerDocument.elementFromPoint(clientX, clientY);
+
+    for (var e = target; e; e = e.parentElement) {
+      if (e === element) {
+        target.dispatchEvent(new MouseEvent('mouseover', {view: window, bubbles: true, cancelable: true, clientX: clientX, clientY: clientY}));
+        target.dispatchEvent(new MouseEvent('mousemove', {view: window, bubbles: true, cancelable: true, clientX: clientX, clientY: clientY}));
+        target.dispatchEvent(new WheelEvent('wheel',     {view: window, bubbles: true, cancelable: true, clientX: clientX, clientY: clientY, deltaY: deltaY}));
+        return;
+      }
+    }    
+    return "Element is not interactable";
+    """, element, deltaY, offsetX, offsetY)
+  if error:
+    raise WebDriverException(error)
+
+def fill(img):
+    return
+
 def do_the_job(args, date, link):
     f = open(f'{args.data_path}{date}.txt', 'w+')
 
@@ -142,8 +168,8 @@ def do_the_job(args, date, link):
     mapa = browser.find_elements_by_class_name('ol-layer')[0]
     map_img = stringToRGB(mapa.screenshot_as_base64)
     
-    #TODO temp
-    #map_img = cv2.imread('mapa.jpg')
+    #TODO test
+    #map_img = cv2.imread('mapa.png')
 
     lower = [80, 90, 180]
     upper = [85, 96, 190]
@@ -162,12 +188,142 @@ def do_the_job(args, date, link):
     ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset, y_offset).double_click().perform()
     ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset, y_offset).double_click().perform()
     ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset, y_offset).double_click().perform()
+    time.sleep(5)
+
+    # zoom out a little bit
+    wheel_element(mapa, 120)
+    wheel_element(mapa, 120)
+    time.sleep(10)
+
+    xx = mask_img.shape[1]/2
+    yy = mask_img.shape[0]/2
+
+    mouse_position =  browser.find_elements_by_id('mousePositionId')[0]
+
+    # nađi longitude/latitude sa slike
+    ac = ActionChains(browser)
+    ac.move_to_element(mapa).move_by_offset(-xx, -yy).perform()
+    time.sleep(2)
+    position1 =  mouse_position.text.split(' ')[1:]
+    ac.move_to_element(mapa).move_by_offset(xx-1, yy-1).perform()
+    time.sleep(5)
+    position2 =  mouse_position.text.split(' ')[1:]
+
+    long1 = float(position1[0][:-1])
+    lat2 = float(position1[1])
+
+    long2 = float(position2[0][:-1])
+    lat1 = float(position2[1])
+
+    #TODO test
+    # long1 = 468752.19
+    # lat2 = 5092446.7
+
+    # long2 = 471029.74
+    # lat1 = 5091376.62
+
+    #TODO uljepsat browser2
+    browser2 = set_browser(args)
+    browser2.set_page_load_timeout(1)
+    browser2.maximize_window()
+    browser2.implicitly_wait(30)
+
+    link2 = f'https://oss.uredjenazemlja.hr/OssWebServices/wms?token=7effb6395af73ee111123d3d1317471357a1f012d4df977d3ab05ebdc184a46e&SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image%2Fpng8&TRANSPARENT=true&LAYERS=oss%3ABZP_CESTICE%2Coss%3ABZP_CESTICE%2Coss%3ABZP_ZGRADE&STYLES=jis_cestice_kathr%2Cjis_cestice_nazivi_kathr%2C&tiled=false&ratio=2&serverType=geoserver&CRS=EPSG%3A3765&WIDTH=2713&HEIGHT=1280&BBOX={long1}%2C{lat1}%2C{long2}%2C{lat2}'
+    browser2.get(link2)
+    time.sleep(5)
+    layout_img_element = browser2.find_element_by_tag_name("img")
+
+    #TODO test
+    #layout_img = cv2.imread('layout_img.png')
+
+    lower = [220, 220, 220]
+    upper = [235, 235, 235]
+    layout_img = stringToRGB(layout_img_element.screenshot_as_base64)
+    layout_img = find_border(layout_img, lower, upper)
+
+    layout_img = cv2.cvtColor(layout_img, cv2.COLOR_BGR2GRAY)
+    layout_img = cv2.resize(layout_img, (map_img.shape[1],map_img.shape[0])) 
+    
+
+    #TODO test
+    #kernel_map_img = cv2.imread('kernel_map_img.png')
+
+    kernel_map_img = stringToRGB(mapa.screenshot_as_base64)
+
+    lower = [80, 90, 180]
+    upper = [85, 96, 190]
+    kernel_mask_border = find_border(kernel_map_img, lower, upper)
+    kernel_mask_border = cv2.cvtColor(kernel_mask_border, cv2.COLOR_BGR2GRAY)
+    #fill image if there is border
+    if np.any(kernel_mask_border):
+        h, w = kernel_mask_border.shape[:2]
+        mask = np.zeros((h+2, w+2), np.uint8)
+        cv2.floodFill(kernel_mask_border, mask, (0,0), 255)
+        kernel_mask_border = cv2.bitwise_not(kernel_mask_border)
+        kernel_mask_border[kernel_mask_border == 255] = 1
+
+    # lower = [20, 130, 90]
+    # upper = [30, 140, 100]
+    # kernel_mask2 = find_border(kernel_map_img, lower, upper)
+    # kernel_mask2 = cv2.cvtColor(kernel_mask2, cv2.COLOR_BGR2GRAY)
+    
+    # uzmi trenutnu mapu
+    # lower_kernel = [66, 100, 134]
+    # upper_kernel = [72, 146, 210]
+    # kernel_mask3 = find_border(kernel_map_img, lower_kernel, upper_kernel)
+    # kernel_mask3 = cv2.cvtColor(kernel_mask3, cv2.COLOR_BGR2GRAY)
+
+    kernel_mask = kernel_mask_border*layout_img
+    kernel_mask[kernel_mask < 255] = 0
+    
+    #loop while there is still some white pixel
+    h, w = kernel_mask.shape[:2]
+    mask = np.zeros((h+2, w+2), np.uint8)
+    while np.any(kernel_mask):
+        i, j = np.where(kernel_mask == 255)
+        x_offset, y_offset = calc_offset(mask_img.shape, j[0], i[0])
+        ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset, y_offset).click().perform()
+        time.sleep(2)
+        cv2.floodFill(kernel_mask, mask, (j[0],i[0]), 0)
+        cv2.imshow("kernel_mask", kernel_mask)
+        cv2.waitKey(2)
+        #TODO colect data
+        prvi_list = browser.find_elements_by_class_name('m-widget28__tab-item')[3:8]
 
 
-    # cv2.imwrite("mapa.png", map_img)
-    # cv2.imshow("map_img", map_img)
-    # cv2.imshow("mask_img", mask_img)
-    # cv2.waitKey(0)
+        drugi_list = browser.find_elements_by_class_name('table_text')
+        for row in drugi_list:  
+            txt =  row.get_attribute("innerHTML") 
+            print(txt)
+        
+
+        treci_list = browser.find_elements_by_class_name('m-widget13__text')
+        for row in treci_list:  
+            txt =  row.get_attribute("innerHTML") 
+            print(txt)
+            
+        #treci_list = browser.find_element_by_xpath('//div[@class="m-widget13__item"]//span[@class="m-widget13__text"]')
+
+        menu12 = browser.find_elements_by_id('menu12')[0]
+        # menu_12_children = menu12.find_element_by_xpath(".//div[@class='m-widget28__tab-item']")
+
+        # menu21 = browser.find_elements_by_id('menu21')[0]
+        # menu_21_children = menu21.find_element_by_xpath(".//div[@class='m-widget28__tab-item']")
+
+        # menu31 = browser.find_elements_by_id('menu31')[0]
+        # menu_31_children = menu31.find_element_by_xpath(".//div[@class='m-widget13__item']")
+
+
+
+    # cv2.imwrite("kernel_map_img.png", kernel_map_img)
+    # cv2.imwrite("kernel_mask.png", kernel_mask)
+    # cv2.imwrite("layout_img.png", layout_img)
+
+    cv2.imshow("kernel_map_img", kernel_map_img)
+    cv2.imshow("kernel_mask_border", kernel_mask_border)
+    cv2.imshow("kernel_mask", kernel_mask)
+    cv2.imshow("layout_img", layout_img)
+    cv2.waitKey(0)
 
    
 

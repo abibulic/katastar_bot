@@ -111,8 +111,33 @@ def wheel_element(element, deltaY = 120, offsetX = 0, offsetY = 0):
 def fill(img):
     return
 
+def find_log_lat(mapa, img_shape, browser):
+    x_corner = img_shape[1]/2
+    y_corner = img_shape[0]/2
+
+    mouse_position =  browser.find_elements_by_id('mousePositionId')[0]
+
+    ac = ActionChains(browser)
+    ac.move_to_element(mapa).move_by_offset(-x_corner, -y_corner).perform()
+    position1 =  mouse_position.text.split(' ')[1:]
+    ac.move_to_element(mapa).move_by_offset(x_corner-1, y_corner-1).perform()
+    position2 =  mouse_position.text.split(' ')[1:]
+
+    long1 = float(position1[0][:-1])
+    lat2 = float(position1[1])
+
+    long2 = float(position2[0][:-1])
+    lat1 = float(position2[1])
+    return long1, lat1, long2, lat2
+
 def do_the_job(args, date, link):
     f = open(f'{args.data_path}{date}.txt', 'w+')
+    line = 'Katastarska općina;Broj katastarske čestice;Adresa katastarske čestice;Površina katastarske čestice/m2;Posjedovni list;Način uporabe i zgrade + Površina/m2;Posjedovni list + Udio + Ime i prezime/Naziv + Adresa\n'
+    
+    count_moves_x = 0
+    count_moves_y = 0
+    move_right = True
+    move_y = True
 
     if args.save_img:
         img_dir = f'{args.img_path}{date}'
@@ -170,10 +195,16 @@ def do_the_job(args, date, link):
     
     #TODO test
     #map_img = cv2.imread('mapa.png')
+    long_orig1, lat_orig1, long_orig2, lat_orig2 = find_log_lat(mapa, map_img.shape, browser)
+    bbox_orig = abs(long_orig1-long_orig2)*abs(lat_orig1-lat_orig2)
 
+    # filtriranje crvene boje granice zagreba
     lower = [80, 90, 180]
     upper = [85, 96, 190]
-    mask_img = find_border(map_img, lower, upper)
+    # mask_img = find_border(map_img, lower, upper)
+    # mask_img = cv2.cvtColor(mask_img, cv2.COLOR_BGR2GRAY)
+    # odaberi roi rucno
+    mask_img = cv2.imread('roi_mask.png')
     mask_img = cv2.cvtColor(mask_img, cv2.COLOR_BGR2GRAY)
 
     i, j = np.where(mask_img == 255)
@@ -193,27 +224,7 @@ def do_the_job(args, date, link):
     # zoom out a little bit
     wheel_element(mapa, 120)
     wheel_element(mapa, 120)
-    time.sleep(10)
-
-    xx = mask_img.shape[1]/2
-    yy = mask_img.shape[0]/2
-
-    mouse_position =  browser.find_elements_by_id('mousePositionId')[0]
-
-    # nađi longitude/latitude sa slike
-    ac = ActionChains(browser)
-    ac.move_to_element(mapa).move_by_offset(-xx, -yy).perform()
-    time.sleep(2)
-    position1 =  mouse_position.text.split(' ')[1:]
-    ac.move_to_element(mapa).move_by_offset(xx-1, yy-1).perform()
-    time.sleep(5)
-    position2 =  mouse_position.text.split(' ')[1:]
-
-    long1 = float(position1[0][:-1])
-    lat2 = float(position1[1])
-
-    long2 = float(position2[0][:-1])
-    lat1 = float(position2[1])
+    time.sleep(10)    
 
     #TODO test
     # long1 = 468752.19
@@ -228,91 +239,199 @@ def do_the_job(args, date, link):
     browser2.maximize_window()
     browser2.implicitly_wait(30)
 
-    link2 = f'https://oss.uredjenazemlja.hr/OssWebServices/wms?token=7effb6395af73ee111123d3d1317471357a1f012d4df977d3ab05ebdc184a46e&SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image%2Fpng8&TRANSPARENT=true&LAYERS=oss%3ABZP_CESTICE%2Coss%3ABZP_CESTICE%2Coss%3ABZP_ZGRADE&STYLES=jis_cestice_kathr%2Cjis_cestice_nazivi_kathr%2C&tiled=false&ratio=2&serverType=geoserver&CRS=EPSG%3A3765&WIDTH=2713&HEIGHT=1280&BBOX={long1}%2C{lat1}%2C{long2}%2C{lat2}'
-    browser2.get(link2)
-    time.sleep(5)
-    layout_img_element = browser2.find_element_by_tag_name("img")
+    x_move = int(mask_img.shape[1]/2)
+    y_move = int(mask_img.shape[0]/2)
+    pix_long = 2277.5500000000466/1808
+    step = 100
 
-    #TODO test
-    #layout_img = cv2.imread('layout_img.png')
+    diff = 10000
 
-    lower = [220, 220, 220]
-    upper = [235, 235, 235]
-    layout_img = stringToRGB(layout_img_element.screenshot_as_base64)
-    layout_img = find_border(layout_img, lower, upper)
+    while count_moves_x*count_moves_y < 100:
 
-    layout_img = cv2.cvtColor(layout_img, cv2.COLOR_BGR2GRAY)
-    layout_img = cv2.resize(layout_img, (map_img.shape[1],map_img.shape[0])) 
-    
-
-    #TODO test
-    #kernel_map_img = cv2.imread('kernel_map_img.png')
-
-    kernel_map_img = stringToRGB(mapa.screenshot_as_base64)
-
-    lower = [80, 90, 180]
-    upper = [85, 96, 190]
-    kernel_mask_border = find_border(kernel_map_img, lower, upper)
-    kernel_mask_border = cv2.cvtColor(kernel_mask_border, cv2.COLOR_BGR2GRAY)
-    #fill image if there is border
-    if np.any(kernel_mask_border):
-        h, w = kernel_mask_border.shape[:2]
-        mask = np.zeros((h+2, w+2), np.uint8)
-        cv2.floodFill(kernel_mask_border, mask, (0,0), 255)
-        kernel_mask_border = cv2.bitwise_not(kernel_mask_border)
-        kernel_mask_border[kernel_mask_border == 255] = 1
-
-    # lower = [20, 130, 90]
-    # upper = [30, 140, 100]
-    # kernel_mask2 = find_border(kernel_map_img, lower, upper)
-    # kernel_mask2 = cv2.cvtColor(kernel_mask2, cv2.COLOR_BGR2GRAY)
-    
-    # uzmi trenutnu mapu
-    # lower_kernel = [66, 100, 134]
-    # upper_kernel = [72, 146, 210]
-    # kernel_mask3 = find_border(kernel_map_img, lower_kernel, upper_kernel)
-    # kernel_mask3 = cv2.cvtColor(kernel_mask3, cv2.COLOR_BGR2GRAY)
-
-    kernel_mask = kernel_mask_border*layout_img
-    kernel_mask[kernel_mask < 255] = 0
-    
-    #loop while there is still some white pixel
-    h, w = kernel_mask.shape[:2]
-    mask = np.zeros((h+2, w+2), np.uint8)
-    while np.any(kernel_mask):
-        i, j = np.where(kernel_mask == 255)
-        x_offset, y_offset = calc_offset(mask_img.shape, j[0], i[0])
-        ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset, y_offset).click().perform()
+        wheel_element(mapa, 120)
         time.sleep(2)
-        cv2.floodFill(kernel_mask, mask, (j[0],i[0]), 0)
-        cv2.imshow("kernel_mask", kernel_mask)
-        cv2.waitKey(2)
-        #TODO colect data
-        prvi_list = browser.find_elements_by_class_name('m-widget28__tab-item')[3:8]
 
+        # nađi longitude/latitude sa slike
+        long1, lat1, long2, lat2 = find_log_lat(mapa, map_img.shape, browser)
+        #bbox = abs(long1 - long2)*abs(lat1 - lat2)
 
-        drugi_list = browser.find_elements_by_class_name('table_text')
-        for row in drugi_list:  
-            txt =  row.get_attribute("innerHTML") 
-            print(txt)
+        #scale = math.sqrt(bbox_orig/bbox)
+
+        link2 = f'https://oss.uredjenazemlja.hr/OssWebServices/wms?token=7effb6395af73ee111123d3d1317471357a1f012d4df977d3ab05ebdc184a46e&SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image%2Fpng8&TRANSPARENT=true&LAYERS=oss%3ABZP_CESTICE%2Coss%3ABZP_CESTICE%2Coss%3ABZP_ZGRADE&STYLES=jis_cestice_kathr%2Cjis_cestice_nazivi_kathr%2C&tiled=false&ratio=2&serverType=geoserver&CRS=EPSG%3A3765&WIDTH=2713&HEIGHT=1280&BBOX={long1}%2C{lat1}%2C{long2}%2C{lat2}'
+        try:
+            browser2.get(link2)
+        except OSError:
+            print(f'Failed to open link: {link}!')
+            pass
+            #break
+
+        time.sleep(5)
+        layout_img_element = browser2.find_element_by_tag_name("img")
+
+        #TODO test
+        #layout_img = cv2.imread('layout_img.png')
+
+        # slika bez granica
+        lower = [220, 220, 220]
+        upper = [235, 235, 235]
+        layout_img = stringToRGB(layout_img_element.screenshot_as_base64)
+        layout_img = find_border(layout_img, lower, upper)
+
+        layout_img = cv2.cvtColor(layout_img, cv2.COLOR_BGR2GRAY)
+        layout_img = cv2.resize(layout_img, (0,0),  fx=1.24, fy=1.24)
+        layout_img = layout_img[138:-134, 287:-286]
+        #layout_img = cv2.resize(layout_img, (map_img.shape[1],map_img.shape[0])) 
         
 
-        treci_list = browser.find_elements_by_class_name('m-widget13__text')
-        for row in treci_list:  
-            txt =  row.get_attribute("innerHTML") 
-            print(txt)
-            
-        #treci_list = browser.find_element_by_xpath('//div[@class="m-widget13__item"]//span[@class="m-widget13__text"]')
+        #TODO test
+        #kernel_map_img = cv2.imread('kernel_map_img.png')
 
-        menu12 = browser.find_elements_by_id('menu12')[0]
-        # menu_12_children = menu12.find_element_by_xpath(".//div[@class='m-widget28__tab-item']")
+        wheel_element(mapa, -120)
+        time.sleep(2)
+        
+        long1, lat1, long2, lat2 = find_log_lat(mapa, map_img.shape, browser)
 
-        # menu21 = browser.find_elements_by_id('menu21')[0]
-        # menu_21_children = menu21.find_element_by_xpath(".//div[@class='m-widget28__tab-item']")
+        # zoomirana slika granice zagreba
+        #kernel_map_img = stringToRGB(mapa.screenshot_as_base64)
+        #cv2.imwrite("test2.png", kernel_map_img)
 
-        # menu31 = browser.find_elements_by_id('menu31')[0]
-        # menu_31_children = menu31.find_element_by_xpath(".//div[@class='m-widget13__item']")
+        # lower = [80, 90, 180]
+        # upper = [85, 96, 190]
+        # kernel_mask_border = find_border(kernel_map_img, lower, upper)
+        # kernel_mask_border = cv2.cvtColor(kernel_mask_border, cv2.COLOR_BGR2GRAY)
+        # # fill image if there is border
+        # if np.any(kernel_mask_border):
+        #     h, w = kernel_mask_border.shape[:2]
+        #     mask = np.zeros((h+2, w+2), np.uint8)
+        #     cv2.floodFill(kernel_mask_border, mask, (0,0), 255)
+        #     kernel_mask_border = cv2.bitwise_not(kernel_mask_border)
+        #     kernel_mask_border[kernel_mask_border == 255] = 1
 
+        # lower = [20, 130, 90]
+        # upper = [30, 140, 100]
+        # kernel_mask2 = find_border(kernel_map_img, lower, upper)
+        # kernel_mask2 = cv2.cvtColor(kernel_mask2, cv2.COLOR_BGR2GRAY)
+        
+        # uzmi trenutnu mapu
+        # lower_kernel = [66, 100, 134]
+        # upper_kernel = [72, 146, 210]
+        # kernel_mask3 = find_border(kernel_map_img, lower_kernel, upper_kernel)
+        # kernel_mask3 = cv2.cvtColor(kernel_mask3, cv2.COLOR_BGR2GRAY)
+
+        #kernel_mask = kernel_mask_border*layout_img
+        kernel_mask = layout_img
+        kernel_mask[kernel_mask < 255] = 0
+        
+        #loop while there is still some white pixel
+        h, w = kernel_mask.shape[:2]
+        mask = np.zeros((h+2, w+2), np.uint8)
+        while np.any(kernel_mask):
+            i, j = np.where(kernel_mask == 255)
+            x_offset, y_offset = calc_offset(mask_img.shape, j[0], i[0])
+            ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset+2, y_offset+2).click().perform()
+            time.sleep(1)
+            cv2.floodFill(kernel_mask, mask, (j[0],i[0]), 0)
+            cv2.imshow("kernel_mask", kernel_mask)
+            cv2.waitKey(2)
+
+            # colect data
+            line = str()
+
+            prvi_list_pdataka = browser.find_elements_by_class_name('m-widget28__tab-item')[3:8]
+            for i, row in enumerate(prvi_list_pdataka):
+                txt = row.text
+                txt = txt.split('\n')[1]
+                if i == 4:
+                    txt = txt[:-11]
+                    line += txt
+                    line += ';'
+                else:
+                    line += txt
+                    line += ';'
+                #print(txt) 
+
+            drugi_list_pdataka = browser.find_elements_by_class_name('table_text')
+            for row in drugi_list_pdataka:  
+                txt =  row.get_attribute("innerHTML")
+                line += txt
+                line += ','
+                #print(txt)
+            line = line[:-1]+';'
+
+            treci_list_pdataka = browser.find_elements_by_class_name('m-widget13__text')
+            wait_flag = False
+            write_flag = False
+            w_count = 0
+            for i, row in enumerate(treci_list_pdataka):
+                txt =  row.get_attribute("innerHTML") 
+                if w_count == 0:
+                    try:
+                        txt = int(txt)
+                        w_count = 4
+                        write_flag = True
+                    except:
+                        w_count = 3
+                        wait_flag = True
+                if w_count != 0 and write_flag == True:
+                    line += str(txt)
+                    line += ','
+                    w_count -= 1
+
+                elif w_count != 0 and wait_flag == True:
+                    w_count -= 1
+                    
+                #print(txt)
+            line = line[:-1]+'\n'
+            f.write(line)
+
+        # move camera
+        if count_moves_x%10 == 0 and count_moves_x >= 0 and move_y:
+            #ActionChains(browser).move_to_element(mapa).move_by_offset(0, y_move-1).click_and_hold().move_by_offset(0, -y_move).release().perform()
+            while diff > 1:
+                temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
+                diff = temp_lat22 - lat1
+                if diff > 10:
+                    step = int(diff/(2*pix_long))
+                ActionChains(browser).move_to_element(mapa).move_by_offset(0, step-1).click_and_hold().move_by_offset(0, -step).release().perform()
+                print(diff)
+
+            diff = 10000
+            move_y = False
+            count_moves_y += 1
+            if move_right:
+                move_right = False
+            else:
+                move_right= True
+        elif move_right:
+            #ActionChains(browser).move_to_element(mapa).move_by_offset(x_move-1, 0).click_and_hold().move_by_offset(-x_move, 0).release().perform()
+            while diff > 1:
+                temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
+                diff = long2 - temp_long11
+                if diff > 10:
+                    step = int(diff/(2*pix_long))
+                ActionChains(browser).move_to_element(mapa).move_by_offset(step-1, 0).click_and_hold().move_by_offset(-step, 0).release().perform()
+                print(diff)
+        
+            diff = 10000
+            count_moves_x += 1
+            move_y = True
+        else:
+            #ActionChains(browser).move_to_element(mapa).move_by_offset(-x_move, 0).click_and_hold().move_by_offset(x_move-1, 0).release().perform()
+            while diff > 1:
+                temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
+                diff = temp_long22 - long1
+                if diff > 10:
+                    step = int(diff/(2*pix_long))
+                ActionChains(browser).move_to_element(mapa).move_by_offset(-step, 0).click_and_hold().move_by_offset(step-1, 0).release().perform()
+                print(diff)
+            diff = 10000
+            count_moves_x += 1
+            move_y = True
+        time.sleep(2)
+
+    f.close()     
+    browser.quit()
+    browser2.quit()
 
 
     # cv2.imwrite("kernel_map_img.png", kernel_map_img)
@@ -324,162 +443,6 @@ def do_the_job(args, date, link):
     cv2.imshow("kernel_mask", kernel_mask)
     cv2.imshow("layout_img", layout_img)
     cv2.waitKey(0)
-
-   
-
-
-
-    # traži cijenu
-    price = browser.find_elements_by_class_name("ClassifiedDetailSummary-priceForeign")
-    price = price[0].text
-    price = int(price.replace('~','').replace('.','').replace('€','').replace(' ',''))
-
-    # traži površinu kuće i broj soba
-    temp = browser.find_elements_by_class_name("ClassifiedDetailHighlightedAttributes-text")
-    indoor_area = int(temp[0].text.split(',')[0])
-    try:
-        num_rooms = temp[1].text.split('-')[0]
-    except:
-        num_rooms = temp[1].text[0]
-
-    # traži ostale izlistane karakteristike
-    temp = browser.find_elements_by_class_name("ClassifiedDetailBasicDetails-textWrapContainer")
-    for i, t in enumerate(temp):
-        text = t.text
-        if text == 'Lokacija':
-            location1 = temp[i+1].text
-        elif text == 'Ulica':
-            street = temp[i+1].text
-        elif text == 'Tip stana':
-            ap_type = temp[i+1].text
-        elif text == 'Broj etaža':
-            num_floors = temp[i+1].text
-        elif text == 'Broj soba' and num_rooms == 'None':
-            num_rooms = temp[i+1].text
-        elif text == 'Kat':
-            floor = temp[i+1].text
-        elif text == 'Ukupni broj katova':
-            building_floors = temp[i+1].text
-        elif text == 'Stambena površina' and indoor_area == 'None':
-            indoor_area = temp[i+1].text[:-2]
-        elif text == 'Netto površina':
-            netto_area = temp[i+1].text[:-2].replace(',','.')
-        elif text == 'Godina izgradnje':
-            build_data = temp[i+1].text.replace('.','')
-        elif text == 'Godina zadnje renovacije':
-            last_renovation = temp[i+1].text.replace('.','')
-        elif text == 'Namještenost i stanje':
-            furnished = temp[i+1].text
-        elif text == 'Broj parkirnih mjesta':
-            parking_lots = temp[i+1].text
-        elif text == 'Balkon/Lođa/Terasa':
-            balcony = temp[i+1].text
-        elif text == 'Energetski razred':
-            energy_class = temp[i+1].text
-    
-    # traži drugu adresu i broj (često bude adresa agencije za oglašavanje)
-    temp = browser.find_elements_by_class_name("ClassifiedDetailOwnerDetails-contactEntry")
-    for i, t in enumerate(temp):
-        text = t.text
-        if 'Adresa' in text:
-            location2 = text[9:]
-        elif '09' in text or '+385' in text:
-            tel = text
-        elif 'Web adresa' in text:
-            agency = text.split('\n')[-1]
-
-    # traži vrijeme posta i datum isteka
-    temp = browser.find_elements_by_class_name("ClassifiedDetailSystemDetails-listData")
-    post_time = temp[0].text
-    exparation_date = temp[1].text
-    time_shown = temp[2].text.split(' ')[0]
-
-    
-    # uzmi sliku karte
-    # mapa = WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "mapboxgl-canvas")))
-    # img = stringToRGB(mapa.screenshot_as_base64)
-    # cv2.imshow("a",img)
-    # cv2.waitKey(0)
-
-    # uzmi slike nekretnine
-    if args.save_img:
-        #imgs = browser.find_elements_by_class_name("ClassifiedDetailGallery-figure")
-        imgs = browser.find_elements_by_xpath("//figure[@class='ClassifiedDetailGallery-figure']/img")
-        for i, img in enumerate(imgs):
-            src = img.get_attribute('src')
-            if src == None:
-                src = img.get_attribute('data-src')
-
-            img_name = f"{img_dir}/{ll:06d}{i:03d}.jpg"
-            urllib.request.urlretrieve(src, img_name)
-
-    # latitude, longitude
-    if street != 'None':
-        geocode_result = geocode(address=location1+','+street, as_featureset=True)
-        latitude1 = geocode_result.features[0].geometry['y']
-        longitude1 = geocode_result.features[0].geometry['x']
-
-    else:
-        geocode_result = geocode(address=location1, as_featureset=True)
-        latitude1 = geocode_result.features[0].geometry['y']
-        longitude1 = geocode_result.features[0].geometry['x']
-        latitude1 += random.random()*0.0007
-        longitude1 += random.random()*0.0007
-
-    x, y = merc(str(latitude1)+','+str(longitude1))
-
-    # geocode_result = geocode(address='Grad Zagreb'+location2, as_featureset=True)
-    # latitude2 = geocode_result.features[0].geometry['y']
-    # longitude2 = geocode_result.features[0].geometry['x']
-
-    # dif_latitude = abs(latitude1-latitude2)
-    # dif_longitude = abs(longitude1-longitude2)
-
-    # if dif_latitude > 0.005 or dif_longitude > 0.005:
-    #     latitude = latitude1
-    #     longitude = longitude1
-    # else:
-    #     latitude = latitude2
-    #     longitude = longitude2
-
-
-    time.sleep(1)
-
-
-    line_string = f'{ll:06d};'+\
-                    link[:-1]+';'\
-                    +str(price)+';'\
-                    +str(indoor_area)+';'\
-                    +num_rooms+';'\
-                    +location1+';'\
-                    +street+';'\
-                    +ap_type+';'\
-                    +num_floors+';'\
-                    +floor+';'\
-                    +building_floors+';'\
-                    +netto_area+';'\
-                    +build_data+';'\
-                    +last_renovation+';'\
-                    +furnished+';'\
-                    +parking_lots+';'\
-                    +balcony+';'\
-                    +energy_class+';'\
-                    +location2+';'\
-                    +tel+';'\
-                    +agency+';'\
-                    +post_time+';'\
-                    +exparation_date+';'\
-                    +time_shown+';'\
-                    +str(latitude1)+';'\
-                    +str(longitude1)+';'\
-                    +str(x)+';'\
-                    +str(y)
-
-    f1.write("%s\n" % line_string)
-        
-    f1.close()
-    f2.close()  
-    browser.quit()
 
 def clean_data(data, data_categories):
     data = data.drop_duplicates()
@@ -561,7 +524,6 @@ def save_pandas(args, date):
     data.to_csv(f'{args.data_path}{date}.csv', index=False)
 
 def run(args, date, last_date, link):
-
     do_the_job(args, date, link)
     save_pandas(args, date)
         

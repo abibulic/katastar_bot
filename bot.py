@@ -69,7 +69,9 @@ def stringToRGB(base64_string):
     return cv2.cvtColor(np.array(image), cv2.COLOR_BGR2RGB)
 
 def set_browser(args):
-    return webdriver.Firefox(executable_path=args.geckodriver_path, firefox_binary=args.firefox_binary)
+    geoDisabled = webdriver.FirefoxOptions()
+    geoDisabled.set_preference("geo.enabled", False)
+    return webdriver.Firefox(executable_path=args.geckodriver_path, firefox_binary=args.firefox_binary, options=geoDisabled)
 
 def find_border(img, lower_colour, upper_colour):
     lower = np.array((lower_colour), dtype="uint8")
@@ -377,7 +379,7 @@ def do_the_job(args, date, link):
     while count_moves_x*count_moves_y < 100:
 
         wheel_element(mapa, 120)
-        time.sleep(2)
+        time.sleep(5)
 
         # nađi longitude/latitude sa slike
         long1, lat1, long2, lat2 = find_log_lat(mapa, map_img.shape, browser)
@@ -419,7 +421,7 @@ def do_the_job(args, date, link):
         #kernel_map_img = cv2.imread('kernel_map_img.png')
 
         wheel_element(mapa, -120)
-        time.sleep(2)
+        time.sleep(5)
         
         long1, lat1, long2, lat2 = find_log_lat(mapa, map_img.shape, browser)
 
@@ -472,6 +474,13 @@ def do_the_job(args, date, link):
             except OSError:
                 print(f'Failed to collect data!')
 
+            #close data dialog
+            try:
+                #close_element = browser.find_element_by_class_name('m-portlet__nav-link')
+                close_element = WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.CLASS_NAME, 'm-portlet__nav-link')))
+            except OSError:
+                print(f'Can not find close button on the website!')
+            ActionChains(browser).move_to_element(close_element).move_by_offset(118, 5).click().perform()
         # move camera
         try:
             count_moves_x, count_moves_y, move_right, move_y = move_camera(browser,

@@ -172,8 +172,9 @@ def zoom_in(browser, mapa, x_offset, y_offset):
 def colect_data(f, browser):
     line = str()
 
-    prvi_list_pdataka = browser.find_elements_by_class_name('m-widget28__tab-item')[3:8]
-    for i, row in enumerate(prvi_list_pdataka):
+    #prvi_list_podataka = WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.CLASS_NAME,'m-widget28__tab-item')))[3:8]
+    prvi_list_podataka = browser.find_elements_by_class_name('m-widget28__tab-item')[3:8]
+    for i, row in enumerate(prvi_list_podataka):
         txt = row.text
         if len(txt):
             txt = txt.split('\n')[1]
@@ -186,8 +187,9 @@ def colect_data(f, browser):
                 line += ';'
         #print(txt) 
 
-    drugi_list_pdataka = browser.find_elements_by_class_name('table_text')
-    for row in drugi_list_pdataka:  
+    #drugi_list_podataka = WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.CLASS_NAME,'table_text')))
+    drugi_list_podataka = browser.find_elements_by_class_name('table_text')
+    for row in drugi_list_podataka:  
         txt =  row.get_attribute("innerHTML")
         if len(txt):
             line += txt
@@ -195,11 +197,12 @@ def colect_data(f, browser):
         #print(txt)
     line = line[:-1]+';'
 
-    treci_list_pdataka = browser.find_elements_by_class_name('m-widget13__text')
+    #treci_list_podataka = WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.CLASS_NAME,'m-widget13__text')))
+    treci_list_podataka = browser.find_elements_by_class_name('m-widget13__text')
     wait_flag = False
     write_flag = False
     w_count = 0
-    for i, row in enumerate(treci_list_pdataka):
+    for i, row in enumerate(treci_list_podataka):
         txt =  row.get_attribute("innerHTML") 
         if len(txt):
             if w_count == 0:
@@ -233,12 +236,14 @@ def move_camera(browser,
                 long1, 
                 lat1, 
                 long2, 
-                lat2, ):
+                lat2,
+                times_to_move_x,
+                times_to_move_y):
 
     step = 10
     diff = 10000
 
-    if count_moves_x%10 == 0 and count_moves_x >= 0 and move_y:
+    if count_moves_x%times_to_move_x == 0 and count_moves_x >= 0 and move_y:
         #ActionChains(browser).move_to_element(mapa).move_by_offset(0, y_move-1).click_and_hold().move_by_offset(0, -y_move).release().perform()
         while diff > 1:
             temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
@@ -289,7 +294,7 @@ def do_the_job(args, date, link):
     count_moves_x = 0
     count_moves_y = 0
     move_right = True
-    move_y = True
+    move_y = False
 
     if args.save_img:
         img_dir = f'{args.img_path}{date}'
@@ -351,9 +356,14 @@ def do_the_job(args, date, link):
     mask_img = cv2.imread('roi_mask.png')
     mask_img = cv2.cvtColor(mask_img, cv2.COLOR_BGR2GRAY)
 
-    i, j = np.where(mask_img == 255)
-
-    x_offset, y_offset = calc_offset(mask_img.shape, j[0], i[0])
+    
+    x_pos = 638
+    y_pos = 343
+    times_to_move_x = 9
+    times_to_move_y = 6
+    x_offset, y_offset = calc_offset(mask_img.shape, x_pos, y_pos)
+    #i, j = np.where(mask_img == 255)
+    #x_offset, y_offset = calc_offset(mask_img.shape, j[0], i[0])
 
     # zoom in
     zoom_in(browser, mapa, x_offset, y_offset)
@@ -376,7 +386,7 @@ def do_the_job(args, date, link):
     y_move = int(mask_img.shape[0]/2)
     pix_long = 2277.5500000000466/1808
  
-    while count_moves_x*count_moves_y < 100:
+    while count_moves_x*count_moves_y < times_to_move_x*times_to_move_y:
 
         wheel_element(mapa, 120)
         time.sleep(5)
@@ -480,7 +490,8 @@ def do_the_job(args, date, link):
                 close_element = WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.CLASS_NAME, 'm-portlet__nav-link')))
             except OSError:
                 print(f'Can not find close button on the website!')
-            ActionChains(browser).move_to_element(close_element).move_by_offset(118, 5).click().perform()
+            if close_element.rect['width'] > 0:
+                ActionChains(browser).move_to_element(close_element).move_by_offset(118, 5).click().perform()
         # move camera
         try:
             count_moves_x, count_moves_y, move_right, move_y = move_camera(browser,
@@ -494,7 +505,9 @@ def do_the_job(args, date, link):
                                                                         long1, 
                                                                         lat1, 
                                                                         long2, 
-                                                                        lat2)
+                                                                        lat2,
+                                                                        times_to_move_x,
+                                                                        times_to_move_y)
         except OSError:
             print(f'Camera move was unsuccessful!')
 

@@ -108,9 +108,6 @@ def wheel_element(element, deltaY = 120, offsetX = 0, offsetY = 0):
   if error:
     raise WebDriverException(error)
 
-def fill(img):
-    return
-
 def find_log_lat(mapa, img_shape, browser):
     x_corner = img_shape[1]/2
     y_corner = img_shape[0]/2
@@ -130,6 +127,159 @@ def find_log_lat(mapa, img_shape, browser):
     lat1 = float(position2[1])
     return long1, lat1, long2, lat2
 
+def accept_cookies(browser):
+    flag = True
+    while flag:
+        #cookies = WebDriverWait(browser, 30).until(EC.presence_of_element_located((By.CLASS_NAME, 'cookie-layout')))
+        cookies = browser.find_elements_by_class_name('cookie-layout')[0]
+        if cookies.rect['height'] != 0:
+            flag = False
+    #ac = ActionChains(browser)
+    ActionChains(browser).move_to_element(cookies).move_by_offset(860, 0).click().perform()
+
+def select_region(browser):
+    # klikni na "Pronađi adrese"
+    #ac = ActionChains(browser)
+    central_image = browser.find_elements_by_class_name('tp-kbimg-wrap')
+    ActionChains(browser).move_to_element(central_image[0]).move_by_offset(0, 620).click().perform()
+
+    # nađi zagreb na mapi
+    ac = ActionChains(browser)
+    dropdown = browser.find_elements_by_class_name('ui-inputgroup')
+    ac.move_to_element(dropdown[2]).move_by_offset(132, 0).click().perform()
+    time.sleep(1)
+    ac.move_to_element(dropdown[2]).move_by_offset(0, 148).click().perform()
+    time.sleep(1)
+    ac.move_to_element(dropdown[2]).move_by_offset(172, 0).click().perform()
+    time.sleep(10)
+
+def zoom_in(browser, mapa, x_offset, y_offset):
+    # zoom in
+    ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset, y_offset).double_click().perform()
+    ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset, y_offset).double_click().perform()
+    ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset, y_offset).double_click().perform()
+    ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset, y_offset).double_click().perform()
+    ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset, y_offset).double_click().perform()
+    ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset, y_offset).double_click().perform()
+    time.sleep(5)
+    # zoom out a little bit
+    wheel_element(mapa, 120)
+    wheel_element(mapa, 120)
+    time.sleep(5)  
+
+def colect_data(f, browser):
+    line = str()
+
+    prvi_list_pdataka = browser.find_elements_by_class_name('m-widget28__tab-item')[3:8]
+    for i, row in enumerate(prvi_list_pdataka):
+        txt = row.text
+        if len(txt):
+            txt = txt.split('\n')[1]
+            if i == 4:
+                txt = txt[:-11]
+                line += txt
+                line += ';'
+            else:
+                line += txt
+                line += ';'
+        #print(txt) 
+
+    drugi_list_pdataka = browser.find_elements_by_class_name('table_text')
+    for row in drugi_list_pdataka:  
+        txt =  row.get_attribute("innerHTML")
+        if len(txt):
+            line += txt
+            line += ','
+        #print(txt)
+    line = line[:-1]+';'
+
+    treci_list_pdataka = browser.find_elements_by_class_name('m-widget13__text')
+    wait_flag = False
+    write_flag = False
+    w_count = 0
+    for i, row in enumerate(treci_list_pdataka):
+        txt =  row.get_attribute("innerHTML") 
+        if len(txt):
+            if w_count == 0:
+                try:
+                    txt = int(txt)
+                    w_count = 4
+                    write_flag = True
+                except:
+                    w_count = 3
+                    wait_flag = True
+            if w_count != 0 and write_flag == True:
+                line += str(txt)
+                line += ','
+                w_count -= 1
+
+            elif w_count != 0 and wait_flag == True:
+                w_count -= 1
+            
+        #print(txt)
+    line = line[:-1]+'\n'
+    f.write(line)
+
+def move_camera(browser,
+                count_moves_x, 
+                count_moves_y, 
+                move_right,
+                move_y,
+                pix_long,
+                mapa,
+                map_img,
+                long1, 
+                lat1, 
+                long2, 
+                lat2, ):
+
+    step = 10
+    diff = 10000
+
+    if count_moves_x%10 == 0 and count_moves_x >= 0 and move_y:
+        #ActionChains(browser).move_to_element(mapa).move_by_offset(0, y_move-1).click_and_hold().move_by_offset(0, -y_move).release().perform()
+        while diff > 1:
+            temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
+            diff = temp_lat22 - lat1
+            if diff > 10:
+                step = int(diff/(2*pix_long))
+            ActionChains(browser).move_to_element(mapa).move_by_offset(0, step-1).click_and_hold().move_by_offset(0, -step).release().perform()
+            print(diff)
+        move_y = False
+        count_moves_y += 1
+        if move_right:
+            move_right = False
+        else:
+            move_right= True
+
+    elif move_right:
+        #ActionChains(browser).move_to_element(mapa).move_by_offset(x_move-1, 0).click_and_hold().move_by_offset(-x_move, 0).release().perform()
+        while diff > 1:
+            temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
+            diff = long2 - temp_long11
+            if diff > 10:
+                step = int(diff/(2*pix_long))
+            ActionChains(browser).move_to_element(mapa).move_by_offset(step-1, 0).click_and_hold().move_by_offset(-step, 0).release().perform()
+            print(diff)
+        count_moves_x += 1
+        move_y = True
+
+    else:
+        #ActionChains(browser).move_to_element(mapa).move_by_offset(-x_move, 0).click_and_hold().move_by_offset(x_move-1, 0).release().perform()
+        while diff > 1:
+            temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
+            diff = temp_long22 - long1
+            if diff > 10:
+                step = int(diff/(2*pix_long))
+            ActionChains(browser).move_to_element(mapa).move_by_offset(-step, 0).click_and_hold().move_by_offset(step-1, 0).release().perform()
+            print(diff)
+        count_moves_x += 1
+        move_y = True
+
+    time.sleep(2)
+
+    return count_moves_x, count_moves_y, move_right, move_y
+    
 def do_the_job(args, date, link):
     f = open(f'{args.data_path}{date}.txt', 'w+')
     line = 'Katastarska općina;Broj katastarske čestice;Adresa katastarske čestice;Površina katastarske čestice/m2;Posjedovni list;Način uporabe i zgrade + Površina/m2;Posjedovni list + Udio + Ime i prezime/Naziv + Adresa\n'
@@ -165,44 +315,36 @@ def do_the_job(args, date, link):
         print(f'Failed to open link: {link}!')
 
     # prihvati kolačiće
-    flag = True
-    while flag:
-        #cookies = WebDriverWait(browser, 30).until(EC.presence_of_element_located((By.CLASS_NAME, 'cookie-layout')))
-        cookies = browser.find_elements_by_class_name('cookie-layout')[0]
-        if cookies.rect['height'] != 0:
-            flag = False
-    #ac = ActionChains(browser)
-    ActionChains(browser).move_to_element(cookies).move_by_offset(860, 0).click().perform()
-
-    # klikni na "Pronađi adrese"
-    #ac = ActionChains(browser)
-    central_image = browser.find_elements_by_class_name('tp-kbimg-wrap')
-    ActionChains(browser).move_to_element(central_image[0]).move_by_offset(0, 620).click().perform()
+    try:
+        accept_cookies(browser)
+    except OSError:
+        print(f'Failed to accept cookies!')
 
     # nađi zagreb na mapi
-    ac = ActionChains(browser)
-    dropdown = browser.find_elements_by_class_name('ui-inputgroup')
-    ac.move_to_element(dropdown[2]).move_by_offset(132, 0).click().perform()
-    time.sleep(1)
-    ac.move_to_element(dropdown[2]).move_by_offset(0, 148).click().perform()
-    time.sleep(1)
-    ac.move_to_element(dropdown[2]).move_by_offset(172, 0).click().perform()
-    time.sleep(20)
+    try:
+        select_region(browser)
+    except OSError:
+        print(f'Failed to select region!')
 
     # pozicioniranje na mapi
-    mapa = browser.find_elements_by_class_name('ol-layer')[0]
+    try:
+        mapa = browser.find_elements_by_class_name('ol-layer')[0]
+    except OSError:
+        print(f'Can not find map on the website!')
+
     map_img = stringToRGB(mapa.screenshot_as_base64)
     
     #TODO test
     #map_img = cv2.imread('mapa.png')
-    long_orig1, lat_orig1, long_orig2, lat_orig2 = find_log_lat(mapa, map_img.shape, browser)
-    bbox_orig = abs(long_orig1-long_orig2)*abs(lat_orig1-lat_orig2)
+    #long_orig1, lat_orig1, long_orig2, lat_orig2 = find_log_lat(mapa, map_img.shape, browser)
+    #bbox_orig = abs(long_orig1-long_orig2)*abs(lat_orig1-lat_orig2)
 
     # filtriranje crvene boje granice zagreba
-    lower = [80, 90, 180]
-    upper = [85, 96, 190]
+    # lower = [80, 90, 180]
+    # upper = [85, 96, 190]
     # mask_img = find_border(map_img, lower, upper)
     # mask_img = cv2.cvtColor(mask_img, cv2.COLOR_BGR2GRAY)
+
     # odaberi roi rucno
     mask_img = cv2.imread('roi_mask.png')
     mask_img = cv2.cvtColor(mask_img, cv2.COLOR_BGR2GRAY)
@@ -212,19 +354,7 @@ def do_the_job(args, date, link):
     x_offset, y_offset = calc_offset(mask_img.shape, j[0], i[0])
 
     # zoom in
-    #ac = ActionChains(browser)
-    ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset, y_offset).double_click().perform()
-    ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset, y_offset).double_click().perform()
-    ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset, y_offset).double_click().perform()
-    ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset, y_offset).double_click().perform()
-    ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset, y_offset).double_click().perform()
-    ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset, y_offset).double_click().perform()
-    time.sleep(5)
-
-    # zoom out a little bit
-    wheel_element(mapa, 120)
-    wheel_element(mapa, 120)
-    time.sleep(10)    
+    zoom_in(browser, mapa, x_offset, y_offset)
 
     #TODO test
     # long1 = 468752.19
@@ -233,19 +363,17 @@ def do_the_job(args, date, link):
     # long2 = 471029.74
     # lat1 = 5091376.62
 
-    #TODO uljepsat browser2
+    # pokreni drugi browser
     browser2 = set_browser(args)
     browser2.set_page_load_timeout(1)
     browser2.maximize_window()
     browser2.implicitly_wait(30)
 
+    # konfiguracijske varijable za pomicanje po mapi
     x_move = int(mask_img.shape[1]/2)
     y_move = int(mask_img.shape[0]/2)
     pix_long = 2277.5500000000466/1808
-    step = 100
-
-    diff = 10000
-
+ 
     while count_moves_x*count_moves_y < 100:
 
         wheel_element(mapa, 120)
@@ -266,7 +394,11 @@ def do_the_job(args, date, link):
             #break
 
         time.sleep(5)
-        layout_img_element = browser2.find_element_by_tag_name("img")
+        try:
+            layout_img_element = browser2.find_element_by_tag_name("img")
+        except OSError:
+            print(f'Can not find image in the second browser!')
+            pass
 
         #TODO test
         #layout_img = cv2.imread('layout_img.png')
@@ -335,99 +467,72 @@ def do_the_job(args, date, link):
             cv2.waitKey(2)
 
             # colect data
-            line = str()
-
-            prvi_list_pdataka = browser.find_elements_by_class_name('m-widget28__tab-item')[3:8]
-            for i, row in enumerate(prvi_list_pdataka):
-                txt = row.text
-                txt = txt.split('\n')[1]
-                if i == 4:
-                    txt = txt[:-11]
-                    line += txt
-                    line += ';'
-                else:
-                    line += txt
-                    line += ';'
-                #print(txt) 
-
-            drugi_list_pdataka = browser.find_elements_by_class_name('table_text')
-            for row in drugi_list_pdataka:  
-                txt =  row.get_attribute("innerHTML")
-                line += txt
-                line += ','
-                #print(txt)
-            line = line[:-1]+';'
-
-            treci_list_pdataka = browser.find_elements_by_class_name('m-widget13__text')
-            wait_flag = False
-            write_flag = False
-            w_count = 0
-            for i, row in enumerate(treci_list_pdataka):
-                txt =  row.get_attribute("innerHTML") 
-                if w_count == 0:
-                    try:
-                        txt = int(txt)
-                        w_count = 4
-                        write_flag = True
-                    except:
-                        w_count = 3
-                        wait_flag = True
-                if w_count != 0 and write_flag == True:
-                    line += str(txt)
-                    line += ','
-                    w_count -= 1
-
-                elif w_count != 0 and wait_flag == True:
-                    w_count -= 1
-                    
-                #print(txt)
-            line = line[:-1]+'\n'
-            f.write(line)
+            try:
+                colect_data(f, browser)
+            except OSError:
+                print(f'Failed to collect data!')
 
         # move camera
-        if count_moves_x%10 == 0 and count_moves_x >= 0 and move_y:
-            #ActionChains(browser).move_to_element(mapa).move_by_offset(0, y_move-1).click_and_hold().move_by_offset(0, -y_move).release().perform()
-            while diff > 1:
-                temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
-                diff = temp_lat22 - lat1
-                if diff > 10:
-                    step = int(diff/(2*pix_long))
-                ActionChains(browser).move_to_element(mapa).move_by_offset(0, step-1).click_and_hold().move_by_offset(0, -step).release().perform()
-                print(diff)
+        try:
+            count_moves_x, count_moves_y, move_right, move_y = move_camera(browser,
+                                                                        count_moves_x, 
+                                                                        count_moves_y, 
+                                                                        move_right,
+                                                                        move_y, 
+                                                                        pix_long,
+                                                                        mapa,
+                                                                        map_img,
+                                                                        long1, 
+                                                                        lat1, 
+                                                                        long2, 
+                                                                        lat2)
+        except OSError:
+            print(f'Camera move was unsuccessful!')
 
-            diff = 10000
-            move_y = False
-            count_moves_y += 1
-            if move_right:
-                move_right = False
-            else:
-                move_right= True
-        elif move_right:
-            #ActionChains(browser).move_to_element(mapa).move_by_offset(x_move-1, 0).click_and_hold().move_by_offset(-x_move, 0).release().perform()
-            while diff > 1:
-                temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
-                diff = long2 - temp_long11
-                if diff > 10:
-                    step = int(diff/(2*pix_long))
-                ActionChains(browser).move_to_element(mapa).move_by_offset(step-1, 0).click_and_hold().move_by_offset(-step, 0).release().perform()
-                print(diff)
+        #TODO izbrisat ako funkcija funkcionira
+        # if count_moves_x%10 == 0 and count_moves_x >= 0 and move_y:
+        #     #ActionChains(browser).move_to_element(mapa).move_by_offset(0, y_move-1).click_and_hold().move_by_offset(0, -y_move).release().perform()
+        #     while diff > 1:
+        #         temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
+        #         diff = temp_lat22 - lat1
+        #         if diff > 10:
+        #             step = int(diff/(2*pix_long))
+        #         ActionChains(browser).move_to_element(mapa).move_by_offset(0, step-1).click_and_hold().move_by_offset(0, -step).release().perform()
+        #         print(diff)
+
+        #     diff = 10000
+        #     move_y = False
+        #     count_moves_y += 1
+        #     if move_right:
+        #         move_right = False
+        #     else:
+        #         move_right= True
+        # elif move_right:
+        #     #ActionChains(browser).move_to_element(mapa).move_by_offset(x_move-1, 0).click_and_hold().move_by_offset(-x_move, 0).release().perform()
+        #     while diff > 1:
+        #         temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
+        #         diff = long2 - temp_long11
+        #         if diff > 10:
+        #             step = int(diff/(2*pix_long))
+        #         ActionChains(browser).move_to_element(mapa).move_by_offset(step-1, 0).click_and_hold().move_by_offset(-step, 0).release().perform()
+        #         print(diff)
         
-            diff = 10000
-            count_moves_x += 1
-            move_y = True
-        else:
-            #ActionChains(browser).move_to_element(mapa).move_by_offset(-x_move, 0).click_and_hold().move_by_offset(x_move-1, 0).release().perform()
-            while diff > 1:
-                temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
-                diff = temp_long22 - long1
-                if diff > 10:
-                    step = int(diff/(2*pix_long))
-                ActionChains(browser).move_to_element(mapa).move_by_offset(-step, 0).click_and_hold().move_by_offset(step-1, 0).release().perform()
-                print(diff)
-            diff = 10000
-            count_moves_x += 1
-            move_y = True
-        time.sleep(2)
+        #     diff = 10000
+        #     count_moves_x += 1
+        #     move_y = True
+        # else:
+        #     #ActionChains(browser).move_to_element(mapa).move_by_offset(-x_move, 0).click_and_hold().move_by_offset(x_move-1, 0).release().perform()
+        #     while diff > 1:
+        #         temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
+        #         diff = temp_long22 - long1
+        #         if diff > 10:
+        #             step = int(diff/(2*pix_long))
+        #         ActionChains(browser).move_to_element(mapa).move_by_offset(-step, 0).click_and_hold().move_by_offset(step-1, 0).release().perform()
+        #         print(diff)
+        #     diff = 10000
+        #     count_moves_x += 1
+        #     move_y = True
+        # time.sleep(2)
 
     f.close()     
     browser.quit()
@@ -438,11 +543,11 @@ def do_the_job(args, date, link):
     # cv2.imwrite("kernel_mask.png", kernel_mask)
     # cv2.imwrite("layout_img.png", layout_img)
 
-    cv2.imshow("kernel_map_img", kernel_map_img)
-    cv2.imshow("kernel_mask_border", kernel_mask_border)
-    cv2.imshow("kernel_mask", kernel_mask)
-    cv2.imshow("layout_img", layout_img)
-    cv2.waitKey(0)
+    # cv2.imshow("kernel_map_img", kernel_map_img)
+    # cv2.imshow("kernel_mask_border", kernel_mask_border)
+    # cv2.imshow("kernel_mask", kernel_mask)
+    # cv2.imshow("layout_img", layout_img)
+    # cv2.waitKey(0)
 
 def clean_data(data, data_categories):
     data = data.drop_duplicates()

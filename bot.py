@@ -1,6 +1,7 @@
 import io
 import os
 import cv2
+import sys
 import time
 import math
 import random
@@ -172,7 +173,7 @@ def zoom_in(browser, mapa, x_offset, y_offset):
 def colect_data(f, browser):
     line = str()
 
-    #prvi_list_podataka = WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.CLASS_NAME,'m-widget28__tab-item')))[3:8]
+    #prvi_list_podataka = WebDriverWait(browser, 10).until(EC.element_to_be_selected((By.CLASS_NAME,'m-widget28__tab-item')))#[3:8]
     prvi_list_podataka = browser.find_elements_by_class_name('m-widget28__tab-item')[3:8]
     for i, row in enumerate(prvi_list_podataka):
         txt = row.text
@@ -187,7 +188,7 @@ def colect_data(f, browser):
                 line += ';'
         #print(txt) 
 
-    #drugi_list_podataka = WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.CLASS_NAME,'table_text')))
+    #drugi_list_podataka = WebDriverWait(browser, 10).until(EC.element_to_be_selected(By.CLASS_NAME('table_text')))
     drugi_list_podataka = browser.find_elements_by_class_name('table_text')
     for row in drugi_list_podataka:  
         txt =  row.get_attribute("innerHTML")
@@ -197,7 +198,7 @@ def colect_data(f, browser):
         #print(txt)
     line = line[:-1]+';'
 
-    #treci_list_podataka = WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.CLASS_NAME,'m-widget13__text')))
+    #treci_list_podataka = WebDriverWait(browser, 10).until(EC.element_to_be_selected((By.CLASS_NAME,'m-widget13__text')))
     treci_list_podataka = browser.find_elements_by_class_name('m-widget13__text')
     wait_flag = False
     write_flag = False
@@ -244,6 +245,7 @@ def move_camera(browser,
     diff = 10000
 
     if count_moves_x%times_to_move_x == 0 and count_moves_x >= 0 and move_y:
+        print('Move down')
         #ActionChains(browser).move_to_element(mapa).move_by_offset(0, y_move-1).click_and_hold().move_by_offset(0, -y_move).release().perform()
         while diff > 1:
             temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
@@ -260,6 +262,7 @@ def move_camera(browser,
             move_right= True
 
     elif move_right:
+        print('Move right')
         #ActionChains(browser).move_to_element(mapa).move_by_offset(x_move-1, 0).click_and_hold().move_by_offset(-x_move, 0).release().perform()
         while diff > 1:
             temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
@@ -272,6 +275,7 @@ def move_camera(browser,
         move_y = True
 
     else:
+        print('Move left')
         #ActionChains(browser).move_to_element(mapa).move_by_offset(-x_move, 0).click_and_hold().move_by_offset(x_move-1, 0).release().perform()
         while diff > 1:
             temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
@@ -318,26 +322,30 @@ def do_the_job(args, date, link):
         browser.get(link)
         # html = browser.find_element_by_tag_name('html')
         # html.send_keys(Keys.END)
-    except OSError:
+    except:
         print(f'Failed to open link: {link}!')
+        sys.exit(1)
 
     # prihvati kolačiće
     try:
         accept_cookies(browser)
-    except OSError:
+    except:
         print(f'Failed to accept cookies!')
+        sys.exit(1)
 
     # nađi zagreb na mapi
     try:
         select_region(browser)
-    except OSError:
+    except:
         print(f'Failed to select region!')
+        sys.exit(1)
 
     # pozicioniranje na mapi
     try:
         mapa = browser.find_elements_by_class_name('ol-layer')[0]
-    except OSError:
+    except:
         print(f'Can not find map on the website!')
+        sys.exit(1)
 
     map_img = stringToRGB(mapa.screenshot_as_base64)
     
@@ -400,7 +408,7 @@ def do_the_job(args, date, link):
         link2 = f'https://oss.uredjenazemlja.hr/OssWebServices/wms?token=7effb6395af73ee111123d3d1317471357a1f012d4df977d3ab05ebdc184a46e&SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image%2Fpng8&TRANSPARENT=true&LAYERS=oss%3ABZP_CESTICE%2Coss%3ABZP_CESTICE%2Coss%3ABZP_ZGRADE&STYLES=jis_cestice_kathr%2Cjis_cestice_nazivi_kathr%2C&tiled=false&ratio=2&serverType=geoserver&CRS=EPSG%3A3765&WIDTH=2713&HEIGHT=1280&BBOX={long1}%2C{lat1}%2C{long2}%2C{lat2}'
         try:
             browser2.get(link2)
-        except OSError:
+        except:
             print(f'Failed to open link: {link}!')
             pass
             #break
@@ -408,7 +416,7 @@ def do_the_job(args, date, link):
         time.sleep(5)
         try:
             layout_img_element = browser2.find_element_by_tag_name("img")
-        except OSError:
+        except:
             print(f'Can not find image in the second browser!')
             pass
 
@@ -481,14 +489,14 @@ def do_the_job(args, date, link):
             # colect data
             try:
                 colect_data(f, browser)
-            except OSError:
+            except:
                 print(f'Failed to collect data!')
 
             #close data dialog
             try:
                 #close_element = browser.find_element_by_class_name('m-portlet__nav-link')
                 close_element = WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.CLASS_NAME, 'm-portlet__nav-link')))
-            except OSError:
+            except:
                 print(f'Can not find close button on the website!')
             if close_element.rect['width'] > 0:
                 ActionChains(browser).move_to_element(close_element).move_by_offset(118, 5).click().perform()
@@ -508,7 +516,7 @@ def do_the_job(args, date, link):
                                                                         lat2,
                                                                         times_to_move_x,
                                                                         times_to_move_y)
-        except OSError:
+        except:
             print(f'Camera move was unsuccessful!')
 
         #TODO izbrisat ako funkcija funkcionira

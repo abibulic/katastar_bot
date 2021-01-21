@@ -595,7 +595,7 @@ def do_the_job(args, date, link):
             x_offset, y_offset = calc_offset(kernel_mask.shape, j[0], i[0])
             ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset+2, y_offset+2).click().perform()
             time.sleep(1)
-            cv2.floodFill(kernel_mask, mask, (j[0],i[0]), 80)
+            cv2.floodFill(kernel_mask, mask, (j[0],i[0]), 0)
             cv2.imshow("kernel_mask", kernel_mask)
             cv2.waitKey(2)
 

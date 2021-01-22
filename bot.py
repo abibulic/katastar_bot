@@ -395,7 +395,7 @@ def do_the_job(args, date, link):
     standard_diff_lat = 1070.089999999851
 
     # koriste se za nastavak ako je bot blokirao
-    continue_lon = start_lon
+    continue_lon = start_lon + 2*standard_diff_lon
     continue_lat = start_lat - standard_diff_lat
 
     #točke pravokutnika koje mora proć da bi uzeo sve podatke
@@ -648,7 +648,7 @@ def do_the_job(args, date, link):
                 if abs(new_lon1-D[0]) < 1 and abs(new_lat1-D[1]) < 1:
                     D_flag = True
                 
-                if B[0] - new_lon1 > 0:
+                if new_lon1 - B[0] > 0:
                     move_down = True
 
             else:
@@ -661,7 +661,7 @@ def do_the_job(args, date, link):
                 if abs(new_lon1-D[0]) < 1 and abs(new_lat1-D[1]) < 1:
                     D_flag = True
                 
-                if new_lon1 - A[0] > 0:
+                if A[0] - new_lon1 > 0:
                     move_down = True
 
             f_pos = open(f'{args.data_path}last_position.txt', 'a')

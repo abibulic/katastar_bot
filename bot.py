@@ -350,7 +350,7 @@ def position_camera(browser,
             if abs(diff_lat) <= 1:
                 step_lat = 1
 
-            if not(step_lon == 1 and step_lat == 1):
+            if step_lon > 1 or step_lat > 1:
                 ActionChains(browser).move_to_element(mapa).move_by_offset(step_lon-1, step_lat-1).click_and_hold().move_to_element(mapa).release().perform()
                 counter += 1
 
@@ -382,11 +382,21 @@ def do_the_job(args, date, link):
     #line = 'Katastarska općina;Broj katastarske čestice;Adresa katastarske čestice;Površina katastarske čestice/m2;Posjedovni list;Način uporabe i zgrade + Površina/m2;Posjedovni list + Udio + Ime i prezime/Naziv + Adresa\n'
     
     f_pos = open(f'{args.data_path}last_position.txt', 'w+')
+    f_pos.close()
+
     # pravokutnik od interesa
     start_lon = 448577.94
     start_lat = 5075598.09
     end_lon = 467923.70
     end_lat = 5067859.79
+
+    # standard diffs
+    standard_diff_lon = 2277.5499999999884
+    standard_diff_lat = 1070.089999999851
+
+    # koriste se za nastavak ako je bot blokirao
+    continue_lon = start_lon
+    continue_lat = start_lat - standard_diff_lat
 
     #točke pravokutnika koje mora proć da bi uzeo sve podatke
     A = [start_lon, start_lat]
@@ -468,7 +478,7 @@ def do_the_job(args, date, link):
     # mask_img = cv2.cvtColor(mask_img, cv2.COLOR_BGR2GRAY)
 
     # nađi startnu poziciju (A točku)
-    x_offset, y_offset = long_lat_to_pix(start_lon, start_lat, browser, mapa, map_img)
+    x_offset, y_offset = long_lat_to_pix(continue_lon, continue_lat, browser, mapa, map_img)
     
     # x_pos = 638
     # y_pos = 343
@@ -483,7 +493,7 @@ def do_the_job(args, date, link):
 
     # move to starting position
     try:
-        new_lon1, new_lat1, new_lon2, new_lat2 = position_camera(browser, mapa, map_img, start_lon, start_lat)
+        new_lon1, new_lat1, new_lon2, new_lat2 = position_camera(browser, mapa, map_img, continue_lon, continue_lat)
         if abs(new_lon1-A[0]) < 1 and abs(new_lat1-A[1]) < 1:
             A_flag = True
     except:
@@ -638,7 +648,7 @@ def do_the_job(args, date, link):
                 if abs(new_lon1-D[0]) < 1 and abs(new_lat1-D[1]) < 1:
                     D_flag = True
                 
-                if abs(new_lon1-B[0]) < 1:
+                if B[0] - new_lon1 > 0:
                     move_down = True
 
             else:
@@ -651,10 +661,12 @@ def do_the_job(args, date, link):
                 if abs(new_lon1-D[0]) < 1 and abs(new_lat1-D[1]) < 1:
                     D_flag = True
                 
-                if abs(new_lon1-A[0]) < 1:
+                if new_lon1 - A[0] > 0:
                     move_down = True
 
+            f_pos = open(f'{args.data_path}last_position.txt', 'a')
             f_pos.write(f'{new_lon1},{new_lat2}\n')
+            f_pos.close()
                 
 
         except:

@@ -342,16 +342,25 @@ def position_camera(browser,
 
             if abs(diff_lon) > 10:
                 step_lon = int(diff_lon/(2*pix_lon))
+                if step_lon > 0:
+                    step_lon -= 1
+                else:
+                    step_lon += 1
+
             if abs(diff_lat) > 10:
                 step_lat = int(diff_lat/(2*pix_lat))
+                if step_lat > 0:
+                    step_lat -= 1
+                else:
+                    step_lat += 1
 
             if abs(diff_lon) <= 1:
                 step_lon = 1
             if abs(diff_lat) <= 1:
                 step_lat = 1
 
-            if step_lon > 1 or step_lat > 1:
-                ActionChains(browser).move_to_element(mapa).move_by_offset(step_lon-1, step_lat-1).click_and_hold().move_to_element(mapa).release().perform()
+            if abs(step_lon) > 1 or abs(step_lat) > 1:
+                ActionChains(browser).move_to_element(mapa).move_by_offset(step_lon, step_lat).click_and_hold().move_to_element(mapa).release().perform()
                 counter += 1
 
     time.sleep(2)
@@ -395,8 +404,8 @@ def do_the_job(args, date, link):
     standard_diff_lat = 1070.089999999851
 
     # koriste se za nastavak ako je bot blokirao
-    continue_lon = start_lon + 2*standard_diff_lon
-    continue_lat = start_lat - standard_diff_lat
+    continue_lon = start_lon#start_lon + 3*standard_diff_lon
+    continue_lat = start_lat#start_lat - standard_diff_lat
 
     #točke pravokutnika koje mora proć da bi uzeo sve podatke
     A = [start_lon, start_lat]
@@ -461,6 +470,9 @@ def do_the_job(args, date, link):
 
     # uzmi sliku mape
     map_img = stringToRGB(mapa.screenshot_as_base64)
+
+    width_img = map_img.shape[1]
+    height_img = map_img.shape[0]
     
     #TODO test
     #map_img = cv2.imread('mapa.png')
@@ -494,7 +506,7 @@ def do_the_job(args, date, link):
     # move to starting position
     try:
         new_lon1, new_lat1, new_lon2, new_lat2 = position_camera(browser, mapa, map_img, continue_lon, continue_lat)
-        if abs(new_lon1-A[0]) < 1 and abs(new_lat1-A[1]) < 1:
+        if abs(new_lon1-A[0]) < 1 and abs(new_lat2-A[1]) < 1:
             A_flag = True
     except:
         print(f'Positioning camera to A was not successful!')
@@ -600,32 +612,77 @@ def do_the_job(args, date, link):
         #loop while there is still some white pixel
         h, w = kernel_mask.shape[:2]
         mask = np.zeros((h+2, w+2), np.uint8)
+        x_offset_offset = 0
+        y_offset_offset = 0
         while np.any(kernel_mask):
+            s2 = -1
             i, j = np.where(kernel_mask == 255)
             x_offset, y_offset = calc_offset(kernel_mask.shape, j[0], i[0])
-            ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset+2, y_offset+2).click().perform()
+            ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset+x_offset_offset, y_offset+y_offset_offset).click().perform()
             time.sleep(1)
-            cv2.floodFill(kernel_mask, mask, (j[0],i[0]), 0)
-            cv2.imshow("kernel_mask", kernel_mask)
-            cv2.waitKey(2)
 
-            # colect data
-            try:
-                colect_data(f, browser)
-            except:
-                print(f'Failed to collect data!')
+            sidebar_elements =  browser.find_elements_by_class_name('m-widget28__pic')
+            for s1, sidebar in enumerate(sidebar_elements):
+                if sidebar.rect['width'] > 0 and sidebar.rect['height'] > 0:
+                    sidebar_element = sidebar
+                    s2 = s1
 
-            #close data dialog
-            try:
-                #close_element = browser.find_element_by_class_name('m-portlet__nav-link')
-                close_element = WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.CLASS_NAME, 'm-portlet__nav-link')))
-            except:
-                print(f'Can not find close button on the website!')
-            if close_element.rect['width'] > 0:
-                ActionChains(browser).move_to_element(close_element).move_by_offset(118, 5).click().perform()
+            if s2 != 1 and s2 >= 0:
+                ActionChains(browser).move_to_element(sidebar_element).move_by_offset(163, -115).click().perform()
+                s2 = -1
+                x_offset_offset += 1
+                pass
+
+            elif s2 == 1:
+                x_offset_offset = 0
+                try:
+                    colect_data(f, browser)
+                except:
+                    print(f'Failed to collect data!')
+                    try:
+                        colect_data(f, browser)
+                    except:
+                        print(f'Failed to collect data!')
+
+                cv2.floodFill(kernel_mask, mask, (j[0],i[0]), 0)
+                cv2.imshow("kernel_mask", kernel_mask)
+                cv2.waitKey(2)
+
+                ActionChains(browser).move_to_element(sidebar_element).move_by_offset(163, -115).click().perform()
+                s2 = -1
+
+            # cv2.floodFill(kernel_mask, mask, (j[0],i[0]), 0)
+            # cv2.imshow("kernel_mask", kernel_mask)
+            # cv2.waitKey(2)
+            
+            # # colect data
+            # try:
+            #     colect_data(f, browser)
+            # except:
+            #     print(f'Failed to collect data!')
+
+            # #close data dialog
+            # try:
+            #     #close_element = browser.find_element_by_class_name('m-portlet__nav-link')
+            #     close_element = WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.CLASS_NAME, 'm-portlet__nav-link')))
+            # except:
+            #     print(f'Can not find close button on the website!')
+            
+            # wait_count = 0
+            # while close_element.rect['width'] == 0 and wait_count < 20:
+            #     #ActionChains(browser).move_to_element(close_element).move_by_offset(118, 5).click().perform()
+            #     time.sleep(1)
+            #     wait_count += 1
+
+            # if close_element.rect['width'] > 0:
+            #     ActionChains(browser).move_to_element(close_element).move_by_offset(118, 5).click().perform()
+            # else:
+            #     time.sleep(10)
+
         # move camera
         try:
             if move_down:
+                print('Moving down...')
                 move_down = False
                 move_right = not(move_right)
 
@@ -639,6 +696,7 @@ def do_the_job(args, date, link):
                     D_flag = True
 
             elif move_right:
+                print('Moving right...')
                 new_lon1, new_lat1, new_lon2, new_lat2 = position_camera(browser, mapa, map_img, lon22, lat22)
 
                 if abs(new_lon1-B[0]) < 1 and abs(new_lat1-B[1]) < 1:
@@ -652,6 +710,7 @@ def do_the_job(args, date, link):
                     move_down = True
 
             else:
+                print('Moving left...')
                 new_lon1, new_lat1, new_lon2, new_lat2 = position_camera(browser, mapa, map_img, lon11-diff_lon2, lat22)
 
                 if abs(new_lon1-B[0]) < 1 and abs(new_lat1-B[1]) < 1:
@@ -671,51 +730,6 @@ def do_the_job(args, date, link):
 
         except:
             print(f'Camera move was unsuccessful!')
-
-        #TODO izbrisat ako funkcija funkcionira
-        # if count_moves_x%10 == 0 and count_moves_x >= 0 and move_y:
-        #     #ActionChains(browser).move_to_element(mapa).move_by_offset(0, y_move-1).click_and_hold().move_by_offset(0, -y_move).release().perform()
-        #     while diff > 1:
-        #         temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
-        #         diff = temp_lat22 - lat1
-        #         if diff > 10:
-        #             step = int(diff/(2*pix_long))
-        #         ActionChains(browser).move_to_element(mapa).move_by_offset(0, step-1).click_and_hold().move_by_offset(0, -step).release().perform()
-        #         print(diff)
-
-        #     diff = 10000
-        #     move_y = False
-        #     count_moves_y += 1
-        #     if move_right:
-        #         move_right = False
-        #     else:
-        #         move_right= True
-        # elif move_right:
-        #     #ActionChains(browser).move_to_element(mapa).move_by_offset(x_move-1, 0).click_and_hold().move_by_offset(-x_move, 0).release().perform()
-        #     while diff > 1:
-        #         temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
-        #         diff = long2 - temp_long11
-        #         if diff > 10:
-        #             step = int(diff/(2*pix_long))
-        #         ActionChains(browser).move_to_element(mapa).move_by_offset(step-1, 0).click_and_hold().move_by_offset(-step, 0).release().perform()
-        #         print(diff)
-        
-        #     diff = 10000
-        #     count_moves_x += 1
-        #     move_y = True
-        # else:
-        #     #ActionChains(browser).move_to_element(mapa).move_by_offset(-x_move, 0).click_and_hold().move_by_offset(x_move-1, 0).release().perform()
-        #     while diff > 1:
-        #         temp_long11, temp_lat11, temp_long22, temp_lat22 = find_log_lat(mapa, map_img.shape, browser)
-        #         diff = temp_long22 - long1
-        #         if diff > 10:
-        #             step = int(diff/(2*pix_long))
-        #         ActionChains(browser).move_to_element(mapa).move_by_offset(-step, 0).click_and_hold().move_by_offset(step-1, 0).release().perform()
-        #         print(diff)
-        #     diff = 10000
-        #     count_moves_x += 1
-        #     move_y = True
-        # time.sleep(2)
 
     f.close()     
     f_pos.close()
@@ -815,11 +829,3 @@ def save_pandas(args, date):
 def run(args, date, last_date, link):
     do_the_job(args, date, link)
     save_pandas(args, date)
-        
-
-
-
-
-
-
-

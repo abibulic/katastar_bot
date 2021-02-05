@@ -390,7 +390,10 @@ def do_the_job(args, date, link):
     f = open(f'{args.data_path}{date}.txt', 'w+')
     #line = 'Katastarska općina;Broj katastarske čestice;Adresa katastarske čestice;Površina katastarske čestice/m2;Posjedovni list;Način uporabe i zgrade + Površina/m2;Posjedovni list + Udio + Ime i prezime/Naziv + Adresa\n'
     
-    f_pos = open(f'{args.data_path}last_position.txt', 'w+')
+    f_pos = open(f'{args.data_path}last_position.txt', 'r+')
+    last_pose = f_pos.readlines()
+    last_pose = last_pose[-1]
+    last_pose = last_pose[:-1].split(',')
     f_pos.close()
 
     # pravokutnik od interesa
@@ -404,8 +407,8 @@ def do_the_job(args, date, link):
     standard_diff_lat = 1070.089999999851
 
     # koriste se za nastavak ako je bot blokirao
-    continue_lon = start_lon#start_lon + 3*standard_diff_lon
-    continue_lat = start_lat#start_lat - standard_diff_lat
+    continue_lon = float(last_pose[0])#start_lon + 3*standard_diff_lon
+    continue_lat = float(last_pose[1])#start_lat - standard_diff_lat
 
     #točke pravokutnika koje mora proć da bi uzeo sve podatke
     A = [start_lon, start_lat]
@@ -413,12 +416,12 @@ def do_the_job(args, date, link):
     C = [start_lon, end_lat]
     D = [end_lon, end_lat]
 
-    A_flag = False
-    B_flag = False
+    A_flag = True
+    B_flag = True
     C_flag = False
     D_flag = False
 
-    move_right = True
+    move_right = False
     move_down = False
 
     if args.save_img:
@@ -614,12 +617,22 @@ def do_the_job(args, date, link):
         mask = np.zeros((h+2, w+2), np.uint8)
         x_offset_offset = 0
         y_offset_offset = 0
+
+        try_count = 0
+
         while np.any(kernel_mask):
             s2 = -1
             i, j = np.where(kernel_mask == 255)
             x_offset, y_offset = calc_offset(kernel_mask.shape, j[0], i[0])
             ActionChains(browser).move_to_element(mapa).move_by_offset(x_offset+x_offset_offset, y_offset+y_offset_offset).click().perform()
             time.sleep(1)
+
+            # negdje je zapelo, nastavi dalje
+            if try_count > 10:
+                try_count = 0
+                cv2.floodFill(kernel_mask, mask, (j[0],i[0]), 0)
+                cv2.imshow("kernel_mask", kernel_mask)
+                cv2.waitKey(2)
 
             sidebar_elements =  browser.find_elements_by_class_name('m-widget28__pic')
             for s1, sidebar in enumerate(sidebar_elements):
@@ -639,10 +652,11 @@ def do_the_job(args, date, link):
                     colect_data(f, browser)
                 except:
                     print(f'Failed to collect data!')
+                    time.sleep(2)
                     try:
                         colect_data(f, browser)
                     except:
-                        print(f'Failed to collect data!')
+                        print(f'Failed to collect data2!')
 
                 cv2.floodFill(kernel_mask, mask, (j[0],i[0]), 0)
                 cv2.imshow("kernel_mask", kernel_mask)
@@ -650,7 +664,8 @@ def do_the_job(args, date, link):
 
                 ActionChains(browser).move_to_element(sidebar_element).move_by_offset(163, -115).click().perform()
                 s2 = -1
-
+            else:
+                try_count += 1
             # cv2.floodFill(kernel_mask, mask, (j[0],i[0]), 0)
             # cv2.imshow("kernel_mask", kernel_mask)
             # cv2.waitKey(2)
@@ -724,7 +739,7 @@ def do_the_job(args, date, link):
                     move_down = True
 
             f_pos = open(f'{args.data_path}last_position.txt', 'a')
-            f_pos.write(f'{new_lon1},{new_lat2}\n')
+            f_pos.write(f'{new_lon1},{new_lat2},{A_flag},{B_flag},{C_flag},{D_flag},{move_right},{move_down}\n')
             f_pos.close()
                 
 

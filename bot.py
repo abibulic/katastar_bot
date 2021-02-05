@@ -394,6 +394,7 @@ def do_the_job(args, date, link):
     last_pose = f_pos.readlines()
     last_pose = last_pose[-1]
     last_pose = last_pose[:-1].split(',')
+    
     f_pos.close()
 
     # pravokutnik od interesa
@@ -416,13 +417,21 @@ def do_the_job(args, date, link):
     C = [start_lon, end_lat]
     D = [end_lon, end_lat]
 
-    A_flag = True
-    B_flag = True
-    C_flag = False
-    D_flag = False
+    # A_flag = True
+    # B_flag = True
+    # C_flag = False
+    # D_flag = False
 
-    move_right = False
-    move_down = False
+    # move_right = False
+    # move_down = False
+
+    A_flag = True if last_pose[2][0] =='T' else False
+    B_flag = True if last_pose[3][0] =='T' else False
+    C_flag = True if last_pose[4][0] =='T' else False
+    D_flag = True if last_pose[5][0] =='T' else False
+
+    move_right = True if last_pose[6][0] =='T' else False
+    move_down = True if last_pose[7][0] =='T' else False
 
     if args.save_img:
         img_dir = f'{args.img_path}{date}'
@@ -644,10 +653,15 @@ def do_the_job(args, date, link):
                 ActionChains(browser).move_to_element(sidebar_element).move_by_offset(163, -115).click().perform()
                 s2 = -1
                 x_offset_offset += 1
+
+                if x_offset_offset > 26 or y_offset_offset > 0:
+                    x_offset_offset = 0
+                    y_offset_offset += 1
                 pass
 
             elif s2 == 1:
                 x_offset_offset = 0
+                y_offset_offset = 0
                 try:
                     colect_data(f, browser)
                 except:
